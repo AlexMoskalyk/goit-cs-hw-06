@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "80:8000"  # Перенаправлення з порту 80 локальної машини на порт 8000 в контейнері
+    depends_on:
+      mongodb:
+        condition: service_healthy  # Запускає app тільки після того, як MongoDB буде готова
+    networks:
+      - app-network
+
+  mongodb:
+    image: mongo:5.0
+    ports:
+      - "27017:27017"  # Відкриває порт 27017 для доступу до MongoDB ззовні
+    volumes:
+      - mongodatacs06:/data/db  # Зберігає дані MongoDB в зовнішньому томі
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo localhost:27017/test --quiet
+      interval: 5s
+      timeout: 5s
+      retries: 5  # Перевіряє стан MongoDB кожні 5 секунд, з часом очікування 5 секунд і 5 спробами
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mongodatacs06:
