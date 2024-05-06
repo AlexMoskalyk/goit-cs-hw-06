@@ -5,23 +5,19 @@ import logging
 from pathlib import Path
 from urllib.parse import urlparse, unquote_plus, parse_qs
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from threading import Thread
+from multiprocessing import Process
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 from datetime import datetime
-from urllib.parse import parse_qs
 
-# Параметри сервера
 HTTP_PORT = 8000
 SOCKET_PORT = 8001
 HTTP_HOST = "0.0.0.0"
 SOCKET_HOST = "0.0.0.0"
 
-# Параметри MongoDB
 URI_DB = "mongodb://mongodb:27017"
 BASE_DIR = Path(__file__).parent
 
-# Налаштування Jinja2 для рендерингу шаблонів
 from jinja2 import Environment, FileSystemLoader
 jinja_env = Environment(loader=FileSystemLoader(BASE_DIR / 'templates'))
 
@@ -67,7 +63,6 @@ class SimpleWebServer(BaseHTTPRequestHandler):
             self.send_error(404, 'File not found')
 
     def handle_post_data(self, data):
-        # Handling data and send it to the socket server
         try:
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             client_socket.sendto(data.encode(), (SOCKET_HOST, SOCKET_PORT))
@@ -78,12 +73,7 @@ class SimpleWebServer(BaseHTTPRequestHandler):
 def run_http_server():
     server = HTTPServer((HTTP_HOST, HTTP_PORT), SimpleWebServer)
     logging.info(f'Starting HTTP Server on {HTTP_HOST}:{HTTP_PORT}')
-    try:
-        server.serve_forever()
-    except Exception as e:
-        logging.error(f"HTTP Server error: {e}")
-    finally:
-        server.server_close()
+    server.serve_forever()
 
 def run_socket_server():
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as server_socket:
@@ -98,9 +88,7 @@ def save_to_db(data):
     client = MongoClient(URI_DB)
     db = client.homework
     data_dict = parse_qs(data)
-    # Конвертація списку значень у єдине значення для кожного ключа
     data_dict = {k: v[0] for k, v in data_dict.items()}
-    # Додавання поточної дати та часу
     data_dict['date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
     db.messages.insert_one(data_dict)
     logging.info(f"Data saved to MongoDB: {data_dict}")
@@ -108,5 +96,9 @@ def save_to_db(data):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    Thread(target=run_http_server, name="HTTP_Server").start()
-    Thread(target=run_socket_server, name="SOCKET_Server").start()
+    process_http = Process(target=run_http_server)
+    process_socket = Process(target=run_socket_server)
+    process_http.start()
+    process_socket.start()
+    process_http.join()
+    process_socket.join()
